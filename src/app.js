@@ -22,12 +22,20 @@ function requireAdapterUrl(req, res, next) {
   next();
 }
 
+// UPAY Pro 文档：type 为 USDT-TRC20、USDT-ERC20、USDT-Polygon、TRX 等，与后台「币种」一致
 function mapTradeTypeToUpay(tt) {
-  if (!tt || typeof tt !== 'string') return 'TRC20-USDT';
-  const s = tt.toLowerCase();
-  if (s.includes('trc20') || s === 'usdt.trc20') return 'TRC20-USDT';
-  if (s.includes('erc20') || s === 'usdt.erc20') return 'ERC20-USDT';
-  return tt;
+  if (!tt || typeof tt !== 'string') return 'USDT-TRC20';
+  const s = tt.toLowerCase().replace(/_/g, '-');
+  if (s.includes('trc20') || s === 'usdt.trc20') return 'USDT-TRC20';
+  if (s.includes('erc20') && s.includes('usdt')) return 'USDT-ERC20';
+  if (s.includes('polygon') && s.includes('usdt')) return 'USDT-Polygon';
+  if (s.includes('bsc') || s.includes('bep20')) return 'USDT-BSC';
+  if (s.includes('arbitrum')) return 'USDT-ArbitrumOne';
+  if (s === 'trx' || s === 'tron') return 'TRX';
+  if (s.includes('erc20') && s.includes('usdc')) return 'USDC-ERC20';
+  if (s.includes('polygon') && s.includes('usdc')) return 'USDC-Polygon';
+  if (tt.includes('USDT') || tt.includes('TRC') || tt.includes('ERC')) return tt;
+  return 'USDT-TRC20';
 }
 
 async function handleCreateOrder(body, res) {
