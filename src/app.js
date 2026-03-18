@@ -21,51 +21,96 @@ function requireAdapterUrl(req, res, next) {
   next();
 }
 
+function mapTradeTypeToUpay(tt) {
+  if (!tt || typeof tt !== 'string') return 'TRC20-USDT';
+  const s = tt.toLowerCase();
+  if (s.includes('trc20') || s === 'usdt.trc20') return 'TRC20-USDT';
+  if (s.includes('erc20') || s === 'usdt.erc20') return 'ERC20-USDT';
+  return tt;
+}
+
+async function handleCreateOrder(body, res) {
+  console.log('[create_order] 收到请求', body?.order_id || body?.out_trade_no || '');
+  if (!verify(body, TOKEN)) {
+    console.log('[create_order] 签名错误');
+    res.status(400).json({ ok: false, message: '签名错误' });
+    return null;
+  }
+  const order_id = body.order_id ?? body.out_trade_no;
+  const notify_url = body.notify_url;
+  const redirect_url = body.redirect_url;
+  if (!order_id || !notify_url) {
+    res.status(400).json({ ok: false, message: '缺少 order_id 或 notify_url' });
+    return null;
+  }
+  const amount = body.amount ?? body.total_amount;
+  const trade_type = mapTradeTypeToUpay(body.trade_type) || 'TRC20-USDT';
+  if (!amount) {
+    res.status(400).json({ ok: false, message: '缺少 amount' });
+    return null;
+  }
+  const orderIdStr = String(order_id);
+  const payload = {
+    amount: Number(amount),
+    order_id: orderIdStr,
+    trade_type,
+    notify_url: `${ADAPTER_PUBLIC_URL}/callback/upay`,
+    redirect_url: redirect_url || '',
+  };
+  const result = await upayClient.createOrder(payload);
+  const trade_id = result?.data?.trade_id ?? result?.trade_id ?? result?.data?.order_id;
+  if (trade_id != null) {
+    store.set(order_id, trade_id, { notify_url, redirect_url });
+  }
+  const payUrl = result?.data?.pay_url ?? result?.pay_url ?? result?.data?.payment_url;
+  console.log('[create_order] 成功', orderIdStr, payUrl ? '有支付链接' : '无支付链接');
+  return { order_id: orderIdStr, trade_id, amount: Number(amount), payUrl };
+}
+
 app.post('/api/create_order', requireAdapterUrl, async (req, res) => {
-  console.log('[create_order] 收到请求', req.body?.order_id || req.body?.out_trade_no || '');
   try {
-    const body = req.body || {};
-    if (!verify(body, TOKEN)) {
-      console.log('[create_order] 签名错误');
-      return res.status(400).json({ ok: false, message: '签名错误' });
-    }
-    const order_id = body.order_id ?? body.out_trade_no;
-    const notify_url = body.notify_url;
-    const redirect_url = body.redirect_url;
-    if (!order_id || !notify_url) {
-      return res.status(400).json({ ok: false, message: '缺少 order_id 或 notify_url' });
-    }
-    const amount = body.amount ?? body.total_amount;
-    const trade_type = body.trade_type || 'TRC20-USDT';
-    if (!amount) {
-      return res.status(400).json({ ok: false, message: '缺少 amount' });
-    }
-    const orderIdStr = String(order_id);
-    const payload = {
-      amount: Number(amount),
-      order_id: orderIdStr,
-      trade_type,
-      notify_url: `${ADAPTER_PUBLIC_URL}/callback/upay`,
-      redirect_url: redirect_url || '',
-    };
-    const result = await upayClient.createOrder(payload);
-    const trade_id = result?.data?.trade_id ?? result?.trade_id ?? result?.data?.order_id;
-    if (trade_id != null) {
-      store.set(order_id, trade_id, { notify_url, redirect_url });
-    }
-    const payUrl = result?.data?.pay_url ?? result?.pay_url ?? result?.data?.payment_url;
-    console.log('[create_order] 成功', orderIdStr, payUrl ? '有支付链接' : '无支付链接');
+    const data = await handleCreateOrder(req.body || {}, res);
+    if (data == null) return;
     return res.json({
       ok: true,
       data: {
-        pay_url: payUrl,
-        payment_url: payUrl,
-        trade_id,
+        pay_url: data.payUrl,
+        payment_url: data.payUrl,
+        trade_id: data.trade_id,
       },
     });
   } catch (e) {
     console.error('[create_order] 失败', e.message);
     return res.status(500).json({ ok: false, message: e.message || '创建订单失败' });
+  }
+});
+
+// BEpusdt 标准路径，独角数卡 NEXT 会请求此地址
+app.post('/api/v1/order/create-transaction', requireAdapterUrl, async (req, res) => {
+  try {
+    const data = await handleCreateOrder(req.body || {}, res);
+    if (data == null) return;
+    return res.json({
+      status_code: 200,
+      message: 'success',
+      data: {
+        trade_id: data.trade_id,
+        order_id: data.order_id,
+        amount: String(data.amount),
+        actual_amount: String(data.amount),
+        status: 1,
+        payment_url: data.payUrl,
+      },
+      request_id: '',
+    });
+  } catch (e) {
+    console.error('[create_order] 失败', e.message);
+    return res.status(500).json({
+      status_code: 500,
+      message: e.message || '创建订单失败',
+      data: null,
+      request_id: '',
+    });
   }
 });
 
