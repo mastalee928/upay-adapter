@@ -1,6 +1,6 @@
 require('dotenv').config();
 const express = require('express');
-const { verify } = require('./sign');
+const { verify, sign: doSign } = require('./sign');
 const store = require('./store');
 const upayClient = require('./upayClient');
 
@@ -32,13 +32,15 @@ function mapTradeTypeToUpay(tt) {
 async function handleCreateOrder(body, res) {
   console.log('[create_order] 收到请求', body?.order_id || body?.out_trade_no || '');
   if (!verify(body, TOKEN)) {
-    console.log('[create_order] 签名错误');
+    const recv = (body.signature || body.sign || '').toLowerCase();
+    const expect = doSign(body, TOKEN);
+    console.log('[create_order] 签名错误', 'received(前8位):', recv.slice(0, 8), 'expected(前8位):', expect.slice(0, 8));
     res.status(400).json({ ok: false, message: '签名错误' });
     return null;
   }
   const order_id = body.order_id ?? body.out_trade_no;
   const notify_url = body.notify_url;
-  const redirect_url = body.redirect_url;
+  const redirect_url = body.redirect_url ?? body.return_url;
   if (!order_id || !notify_url) {
     res.status(400).json({ ok: false, message: '缺少 order_id 或 notify_url' });
     return null;
