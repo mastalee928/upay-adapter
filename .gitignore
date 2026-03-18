@@ -1,0 +1,5 @@
+node_modules/
+.env
+*.log
+standalone/upay-adapter*
+.DS_Store
