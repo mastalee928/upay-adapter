@@ -1,5 +1,7 @@
 # Docker 部署
 
+**环境变量文件**：`.env` 放在**项目根目录**（与 `docker` 文件夹同级），不在 `docker/` 内。`docker-compose` 通过 `env_file: ../.env` 读取。
+
 在**项目根目录**执行：
 
 ```bash
