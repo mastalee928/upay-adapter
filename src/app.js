@@ -60,6 +60,7 @@ async function handleCreateOrder(body, res) {
     amount: Number(amount),
     order_id: orderIdStr,
     trade_type,
+    Type: trade_type,
     notify_url: `${ADAPTER_PUBLIC_URL}/callback/upay`,
     redirect_url: redirect_url || '',
   };
