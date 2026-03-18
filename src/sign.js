@@ -36,11 +36,20 @@ function verifyCreateOrder(params, token) {
   return received && received === expected;
 }
 
+/** BEpusdt 回调验签参数字段（按字母序），独角数卡用 auth_token 验签 */
+const CALLBACK_SIGN_KEYS = ['actual_amount', 'amount', 'block_transaction_id', 'order_id', 'status', 'token', 'trade_id'];
+
+function signCallbackForDujiaoka(params, token) {
+  const str = buildSignStrWhitelist(params, CALLBACK_SIGN_KEYS);
+  return crypto.createHash('md5').update(str + token).digest('hex').toLowerCase();
+}
+
 module.exports = {
   buildSignStr,
   buildSignStrWhitelist,
   sign,
   verify,
   verifyCreateOrder,
+  signCallbackForDujiaoka,
   CREATE_ORDER_SIGN_KEYS,
 };

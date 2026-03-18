@@ -1,6 +1,6 @@
 require('dotenv').config();
 const express = require('express');
-const { verifyCreateOrder, buildSignStrWhitelist } = require('./sign');
+const { verifyCreateOrder, buildSignStrWhitelist, signCallbackForDujiaoka } = require('./sign');
 const { CREATE_ORDER_SIGN_KEYS } = require('./sign');
 const store = require('./store');
 const upayClient = require('./upayClient');
@@ -145,10 +145,21 @@ async function handleCallback(params, res) {
     return res.send('success');
   }
   try {
+    // 转成独角数卡(BEpusdt)期望的回调格式并用渠道 auth_token 重签，避免 callback_unrecognized 告警
+    const payload = {
+      trade_id: String(params.trade_id ?? ''),
+      order_id: String(params.order_id ?? params.out_trade_no ?? ''),
+      amount: Number(params.amount) || 0,
+      actual_amount: Number(params.actual_amount) || 0,
+      token: String(params.token ?? ''),
+      block_transaction_id: String(params.block_transaction_id ?? '0'),
+      status: 2,
+    };
+    payload.signature = signCallbackForDujiaoka(payload, TOKEN);
     const forwardRes = await fetch(info.notify_url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(params),
+      body: JSON.stringify(payload),
     });
     console.log('forward callback', info.notify_url, forwardRes.status);
   } catch (e) {
