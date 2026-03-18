@@ -9,8 +9,9 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 const PORT = Number(process.env.PORT) || 3100;
-const TOKEN = process.env.UPAY_API_TOKEN || '';
 const ADAPTER_PUBLIC_URL = (process.env.ADAPTER_PUBLIC_URL || '').replace(/\/$/, '');
+const GATEWAY_TOKEN = process.env.GATEWAY_TOKEN || process.env.UPAY_API_TOKEN || '';
+const TOKEN = GATEWAY_TOKEN;
 
 function requireAdapterUrl(req, res, next) {
   if (!ADAPTER_PUBLIC_URL) {
@@ -50,8 +51,15 @@ app.post('/api/create_order', requireAdapterUrl, async (req, res) => {
     if (trade_id != null) {
       store.set(order_id, trade_id, { notify_url, redirect_url });
     }
-    const payUrl = result?.data?.pay_url ?? result?.pay_url;
-    return res.json({ ok: true, data: { pay_url: payUrl, trade_id } });
+    const payUrl = result?.data?.pay_url ?? result?.pay_url ?? result?.data?.payment_url;
+    return res.json({
+      ok: true,
+      data: {
+        pay_url: payUrl,
+        payment_url: payUrl,
+        trade_id,
+      },
+    });
   } catch (e) {
     console.error('create_order error', e);
     return res.status(500).json({ ok: false, message: e.message || '创建订单失败' });
