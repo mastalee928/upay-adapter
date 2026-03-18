@@ -56,13 +56,13 @@ async function handleCreateOrder(body, res) {
     return null;
   }
   const orderIdStr = String(order_id);
+  // UPAY Pro 文档：请求字段为 type/order_id/amount/notify_url/redirect_url，redirect_url 必填且为有效 URL
   const payload = {
-    amount: Number(amount),
+    type: trade_type,
     order_id: orderIdStr,
-    trade_type,
-    Type: trade_type,
+    amount: Number(amount),
     notify_url: `${ADAPTER_PUBLIC_URL}/callback/upay`,
-    redirect_url: redirect_url || '',
+    redirect_url: redirect_url || `${ADAPTER_PUBLIC_URL}/return`,
   };
   const result = await upayClient.createOrder(payload);
   const trade_id = result?.data?.trade_id ?? result?.trade_id ?? result?.data?.order_id;
