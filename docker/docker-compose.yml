@@ -1,0 +1,17 @@
+# UPAY 独角数卡适配器
+# 在项目根目录执行: docker compose -f docker/docker-compose.yml up -d --build
+# 使用前在根目录: cp .env.example .env 并填写 UPAY_BASE_URL、UPAY_API_TOKEN、ADAPTER_PUBLIC_URL
+services:
+  adapter:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: upay-adapter:latest
+    container_name: upay-adapter
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3100}:3100"
+    env_file:
+      - ../.env
+    environment:
+      - PORT=3100

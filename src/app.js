@@ -1,0 +1,91 @@
+require('dotenv').config();
+const express = require('express');
+const { verify } = require('./sign');
+const store = require('./store');
+const upayClient = require('./upayClient');
+
+const app = express();
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+const PORT = Number(process.env.PORT) || 3100;
+const TOKEN = process.env.UPAY_API_TOKEN || '';
+const ADAPTER_PUBLIC_URL = (process.env.ADAPTER_PUBLIC_URL || '').replace(/\/$/, '');
+
+function requireAdapterUrl(req, res, next) {
+  if (!ADAPTER_PUBLIC_URL) {
+    res.status(503).json({ ok: false, message: 'ADAPTER_PUBLIC_URL 未配置' });
+    return;
+  }
+  next();
+}
+
+app.post('/api/create_order', requireAdapterUrl, async (req, res) => {
+  try {
+    const body = req.body || {};
+    if (!verify(body, TOKEN)) {
+      return res.status(400).json({ ok: false, message: '签名错误' });
+    }
+    const order_id = body.order_id ?? body.out_trade_no;
+    const notify_url = body.notify_url;
+    const redirect_url = body.redirect_url;
+    if (!order_id || !notify_url) {
+      return res.status(400).json({ ok: false, message: '缺少 order_id 或 notify_url' });
+    }
+    const amount = body.amount ?? body.total_amount;
+    const trade_type = body.trade_type || 'TRC20-USDT';
+    if (!amount) {
+      return res.status(400).json({ ok: false, message: '缺少 amount' });
+    }
+    const orderIdStr = String(order_id);
+    const payload = {
+      amount: Number(amount),
+      order_id: orderIdStr,
+      trade_type,
+      notify_url: `${ADAPTER_PUBLIC_URL}/callback/upay`,
+      redirect_url: redirect_url || '',
+    };
+    const result = await upayClient.createOrder(payload);
+    const trade_id = result?.data?.trade_id ?? result?.trade_id ?? result?.data?.order_id;
+    if (trade_id != null) {
+      store.set(order_id, trade_id, { notify_url, redirect_url });
+    }
+    const payUrl = result?.data?.pay_url ?? result?.pay_url;
+    return res.json({ ok: true, data: { pay_url: payUrl, trade_id } });
+  } catch (e) {
+    console.error('create_order error', e);
+    return res.status(500).json({ ok: false, message: e.message || '创建订单失败' });
+  }
+});
+
+app.get('/callback/upay', (req, res) => handleCallback(req.query, res));
+app.post('/callback/upay', (req, res) => handleCallback(req.body || {}, res));
+
+async function handleCallback(params, res) {
+  const status = Number(params.status);
+  if (status !== 2) {
+    return res.send('success');
+  }
+  const order_id = params.order_id ?? params.out_trade_no;
+  const trade_id = params.trade_id;
+  const key = order_id ?? trade_id;
+  const info = key != null ? store.get(key) : null;
+  if (!info?.notify_url) {
+    return res.send('success');
+  }
+  try {
+    const forwardRes = await fetch(info.notify_url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+    });
+    console.log('forward callback', info.notify_url, forwardRes.status);
+  } catch (e) {
+    console.error('forward callback error', e);
+  }
+  return res.send('success');
+}
+
+app.listen(PORT, () => {
+  console.log(`upay-adapter listening on ${PORT}`);
+});
