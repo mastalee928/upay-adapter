@@ -22,9 +22,11 @@ function requireAdapterUrl(req, res, next) {
 }
 
 app.post('/api/create_order', requireAdapterUrl, async (req, res) => {
+  console.log('[create_order] 收到请求', req.body?.order_id || req.body?.out_trade_no || '');
   try {
     const body = req.body || {};
     if (!verify(body, TOKEN)) {
+      console.log('[create_order] 签名错误');
       return res.status(400).json({ ok: false, message: '签名错误' });
     }
     const order_id = body.order_id ?? body.out_trade_no;
@@ -52,6 +54,7 @@ app.post('/api/create_order', requireAdapterUrl, async (req, res) => {
       store.set(order_id, trade_id, { notify_url, redirect_url });
     }
     const payUrl = result?.data?.pay_url ?? result?.pay_url ?? result?.data?.payment_url;
+    console.log('[create_order] 成功', orderIdStr, payUrl ? '有支付链接' : '无支付链接');
     return res.json({
       ok: true,
       data: {
@@ -61,7 +64,7 @@ app.post('/api/create_order', requireAdapterUrl, async (req, res) => {
       },
     });
   } catch (e) {
-    console.error('create_order error', e);
+    console.error('[create_order] 失败', e.message);
     return res.status(500).json({ ok: false, message: e.message || '创建订单失败' });
   }
 });
