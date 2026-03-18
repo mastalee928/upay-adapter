@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
-const { verify, sign: doSign, buildSignStr } = require('./sign');
+const { verifyCreateOrder, buildSignStrWhitelist } = require('./sign');
+const { CREATE_ORDER_SIGN_KEYS } = require('./sign');
 const store = require('./store');
 const upayClient = require('./upayClient');
 
@@ -31,12 +32,13 @@ function mapTradeTypeToUpay(tt) {
 
 async function handleCreateOrder(body, res) {
   console.log('[create_order] 收到请求', body?.order_id || body?.out_trade_no || '');
-  if (!verify(body, TOKEN)) {
+  if (!verifyCreateOrder(body, TOKEN)) {
     const recv = (body.signature || body.sign || '').toLowerCase();
-    const expect = doSign(body, TOKEN);
-    const signStr = buildSignStr(body);
+    const signStr = buildSignStrWhitelist(body, CREATE_ORDER_SIGN_KEYS);
+    const crypto = require('crypto');
+    const expect = crypto.createHash('md5').update(signStr + TOKEN).digest('hex').toLowerCase();
     console.log('[create_order] 签名错误', 'received(前8):', recv.slice(0, 8), 'expected(前8):', expect.slice(0, 8));
-    console.log('[create_order] 我方参与签名的参数字符串(无token):', signStr);
+    console.log('[create_order] 我方参与签名的参数字符串(仅BEpusdt字段,无token):', signStr);
     res.status(400).json({ ok: false, message: '签名错误' });
     return null;
   }

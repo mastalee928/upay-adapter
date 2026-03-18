@@ -19,4 +19,28 @@ function verify(params, token) {
   return received && received === expected;
 }
 
-module.exports = { buildSignStr, sign, verify };
+/** BEpusdt 创建订单时只对这些参数签名，独角数卡 NEXT 可能不签 guest、order_no 等 */
+const CREATE_ORDER_SIGN_KEYS = ['address', 'amount', 'fiat', 'name', 'notify_url', 'order_id', 'redirect_url', 'return_url', 'trade_type', 'timeout', 'rate'];
+
+function buildSignStrWhitelist(params, allowedKeys) {
+  const sorted = allowedKeys
+    .filter((k) => params[k] != null && params[k] !== '')
+    .sort();
+  return sorted.map((k) => `${k}=${params[k]}`).join('&');
+}
+
+function verifyCreateOrder(params, token) {
+  const received = (params.signature || params.sign || '').toLowerCase();
+  const str = buildSignStrWhitelist(params, CREATE_ORDER_SIGN_KEYS);
+  const expected = crypto.createHash('md5').update(str + token).digest('hex').toLowerCase();
+  return received && received === expected;
+}
+
+module.exports = {
+  buildSignStr,
+  buildSignStrWhitelist,
+  sign,
+  verify,
+  verifyCreateOrder,
+  CREATE_ORDER_SIGN_KEYS,
+};
