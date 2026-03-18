@@ -1,8 +1,9 @@
 const crypto = require('crypto');
 
-function buildSignStr(params, excludeKey = 'signature') {
+function buildSignStr(params, excludeKeys = ['signature', 'sign']) {
+  const set = Array.isArray(excludeKeys) ? new Set(excludeKeys) : new Set([excludeKeys]);
   const keys = Object.keys(params)
-    .filter((k) => params[k] != null && params[k] !== '' && k !== excludeKey)
+    .filter((k) => params[k] != null && params[k] !== '' && !set.has(k))
     .sort();
   return keys.map((k) => `${k}=${params[k]}`).join('&');
 }

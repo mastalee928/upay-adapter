@@ -1,6 +1,6 @@
 require('dotenv').config();
 const express = require('express');
-const { verify, sign: doSign } = require('./sign');
+const { verify, sign: doSign, buildSignStr } = require('./sign');
 const store = require('./store');
 const upayClient = require('./upayClient');
 
@@ -34,7 +34,9 @@ async function handleCreateOrder(body, res) {
   if (!verify(body, TOKEN)) {
     const recv = (body.signature || body.sign || '').toLowerCase();
     const expect = doSign(body, TOKEN);
-    console.log('[create_order] 签名错误', 'received(前8位):', recv.slice(0, 8), 'expected(前8位):', expect.slice(0, 8));
+    const signStr = buildSignStr(body);
+    console.log('[create_order] 签名错误', 'received(前8):', recv.slice(0, 8), 'expected(前8):', expect.slice(0, 8));
+    console.log('[create_order] 我方参与签名的参数字符串(无token):', signStr);
     res.status(400).json({ ok: false, message: '签名错误' });
     return null;
   }
